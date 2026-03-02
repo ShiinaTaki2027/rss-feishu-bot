@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import requests
 import feedparser
 
@@ -45,6 +46,39 @@ def entry_id(entry):
 
 
 # ---------------- 飞书推送（卡片） ----------------
+def format_item_content(title: str, link: str, summary: str) -> str:
+    """格式化单条推送内容，优先把 AI 早报标题拆成更易读的多行。"""
+    content = title.strip() or "(无标题)"
+
+    # 兼容「YYYY-MM-DD - AI 早报 ... 概览 ... #1 ... #2」格式
+    match = re.match(r"^(\d{4}-\d{2}-\d{2})\s*-\s*AI\s*早报", content)
+    if match:
+        date = match.group(1)
+        lines = [f"{date} - AI 早报"]
+
+        # 优先展示“概览”后的分段内容
+        overview = content.split("概览", 1)[1].strip() if "概览" in content else ""
+        if overview:
+            for seg in re.finditer(r"(.*?)(?:\s*#(\d+))(?:\s+|$)", overview):
+                text = (seg.group(1) or "").strip()
+                idx = seg.group(2)
+                if text and idx:
+                    lines.append(f"{text} #{idx}")
+
+        if len(lines) > 1:
+            content = "\n".join(lines)
+
+    if link:
+        content = f"[{content}]({link})"
+
+    if INCLUDE_SUMMARY and summary:
+        if len(summary) > SUMMARY_MAX_LEN:
+            summary = summary[:SUMMARY_MAX_LEN] + "…"
+        content += f"\n{summary}"
+
+    return content
+
+
 def feishu_send_card(card_title: str, items: list[dict]):
     """
     items: [{"title": "...", "link": "...", "summary": "..."}]
@@ -53,21 +87,12 @@ def feishu_send_card(card_title: str, items: list[dict]):
         raise RuntimeError("Missing FEISHU_WEBHOOK (set it in GitHub Secrets).")
 
     elements = []
-    for idx, item in enumerate(items, 1):
+    for item in items:
         title = item.get("title", "(无标题)")
         link = item.get("link", "")
         summary = (item.get("summary") or "").strip()
 
-        md = f"{idx}."
-        if link:
-            md += f" [{title}]({link})"
-        else:
-            md += f" {title}"
-
-        if INCLUDE_SUMMARY and summary:
-            if len(summary) > SUMMARY_MAX_LEN:
-                summary = summary[:SUMMARY_MAX_LEN] + "…"
-            md += f" - {summary}"
+        md = format_item_content(title=title, link=link, summary=summary)
 
         elements.append({
             "tag": "div",
