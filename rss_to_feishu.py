@@ -7,6 +7,26 @@ from datetime import datetime
 GITHUB_REPO = "imjuya/juya-ai-daily"
 FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK", "")
 
+# 跳过不需要展示的章节
+SKIP_SECTIONS = {"概览"}
+
+# 分类 emoji 映射表（未匹配到的自动用 📌）
+EMOJI_MAP = {
+    "要闻":            "🗞️ 要闻",
+    "模型发布":         "🚀 模型发布",
+    "开发生态":         "🛠️ 开发生态",
+    "技术与洞察":       "🔬 技术与洞察",
+    "行业动态":         "📊 行业动态",
+    "前瞻与传闻":       "🔮 前瞻与传闻",
+    "AI for Science":  "🧪 AI for Science",
+    "具身智能":         "🤖 具身智能",
+    "AI音乐":          "🎵 AI音乐",
+    "AI绘画":          "🎨 AI绘画",
+    "AI视频":          "🎬 AI视频",
+    "工具推荐":         "⚙️ 工具推荐",
+    "产品动态":         "📱 产品动态",
+}
+
 
 def get_latest_issue():
     url = f"https://api.github.com/repos/{GITHUB_REPO}/issues"
@@ -21,6 +41,10 @@ def get_latest_issue():
 
 
 def parse_markdown(body):
+    """
+    解析 Issue Markdown，按 ## 分类提取条目。
+    跳过 SKIP_SECTIONS 中定义的章节（如"概览"）。
+    """
     sections = {}
     current_section = None
 
@@ -28,15 +52,25 @@ def parse_markdown(body):
         line = line.strip()
         if not line:
             continue
+
         if line.startswith('## '):
-            current_section = line[3:].strip()
-            sections[current_section] = []
+            title = line[3:].strip()
+            if title in SKIP_SECTIONS:
+                current_section = None  # 跳过该分类
+            else:
+                current_section = title
+                sections[current_section] = []
+
         elif line.startswith('###'):
-            continue
+            continue  # 忽略三级标题
+
         elif (line.startswith('- ') or line.startswith('* ')) and current_section is not None:
             text = line[2:].strip()
+            # 去掉 Markdown 链接 [文字](url) → 文字
             text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+            # 去掉行内代码
             text = re.sub(r'`[^`]+`', '', text).strip()
+            # 去掉末尾的 #数字 标签
             text = re.sub(r'\s*#\d+\s*$', '', text).strip()
             if text:
                 sections[current_section].append(text)
@@ -48,23 +82,6 @@ def build_feishu_card(issue, sections):
     today = datetime.now().strftime("%Y-%m-%d")
     elements = []
 
-    EMOJI_MAP = {
-        "要闻":           "🗞️ 要闻",
-        "模型发布":        "🚀 模型发布",
-        "开发生态":        "🛠️ 开发生态",
-        "技术与洞察":      "🔬 技术与洞察",
-        "行业动态":        "📊 行业动态",
-        "前瞻与传闻":      "🔮 前瞻与传闻",
-        "AI for Science": "🧪 AI for Science",
-        "具身智能":        "🤖 具身智能",
-        "AI音乐":         "🎵 AI音乐",
-        "AI绘画":         "🎨 AI绘画",
-        "AI视频":         "🎬 AI视频",
-        "工具推荐":        "⚙️ 工具推荐",
-        "概览":           "📋 概览",
-        "产品动态":        "📱 产品动态",
-    }
-
     overview_lines = []
     for title, items in sections.items():
         if not items:
@@ -73,7 +90,7 @@ def build_feishu_card(issue, sections):
         overview_lines.append(f"**{display_title}**")
         for item in items:
             overview_lines.append(f"• {item}")
-        overview_lines.append("")
+        overview_lines.append("")  # 分类间空行
 
     elements.append({
         "tag": "div",
