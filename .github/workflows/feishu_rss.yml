@@ -21,12 +21,24 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: pip install requests
+      - name: Install fonts
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y fonts-noto-cjk
 
-      - name: Push to Feishu
+      - name: Install dependencies
+        run: pip install requests Pillow
+
+      - name: Push to Feishu and generate image
         env:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}   # 新增这行
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
         run: python rss_to_feishu.py
+
+      - name: Upload daily image
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-report-image
+          path: daily_report.png
+          retention-days: 7
