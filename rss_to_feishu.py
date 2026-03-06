@@ -1,6 +1,7 @@
 import os
 import json
 import re
+from html import unescape
 import requests
 import feedparser
 
@@ -22,6 +23,9 @@ TIMEOUT = int(os.environ.get("TIMEOUT", "15"))
 # 卡片显示摘要（1=显示，0=不显示）
 INCLUDE_SUMMARY = os.environ.get("INCLUDE_SUMMARY", "0") == "1"
 SUMMARY_MAX_LEN = int(os.environ.get("SUMMARY_MAX_LEN", "140"))
+
+# 结构化摘要中每条新闻展示的要点数量
+DIGEST_POINTS_PER_ITEM = int(os.environ.get("DIGEST_POINTS_PER_ITEM", "2"))
 
 # 没有新内容时是否也发提示（可选：1=发提示，0=不发）
 ALWAYS_NOTIFY = os.environ.get("ALWAYS_NOTIFY", "0") == "1"
@@ -55,7 +59,20 @@ def build_structured_digest(items: list[dict]) -> str:
     for item in items:
         category = classify_news(item)
         title = (item.get("title") or "(无标题)").strip()
-        grouped.setdefault(category, []).append(f"- {title}")
+        link = (item.get("link") or "").strip()
+        published = (item.get("published") or "").strip()
+        summary = (item.get("summary") or "").strip()
+
+        title_line = f"- [{title}]({link})" if link else f"- {title}"
+        if published:
+            title_line += f"（{published}）"
+
+        detail_lines = [title_line]
+        summary_points = extract_summary_points(summary, DIGEST_POINTS_PER_ITEM)
+        for point in summary_points:
+            detail_lines.append(f"  - {point}")
+
+        grouped.setdefault(category, []).append("\n".join(detail_lines))
 
     sections = [LEAD_SENTENCE]
     for category in [*CATEGORIES.keys(), "其他"]:
@@ -65,6 +82,34 @@ def build_structured_digest(items: list[dict]) -> str:
             sections.extend(news_lines)
 
     return "\n\n".join(sections)
+
+
+def extract_summary_points(summary: str, max_points: int = 2) -> list[str]:
+    if not summary or max_points <= 0:
+        return []
+
+    text = unescape(summary)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</(p|li|h\d)>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    if not text:
+        return []
+
+    candidates = re.split(r"[；;。.!?！？]\s*", text)
+    points = []
+    for seg in candidates:
+        seg = seg.strip(" -•\t\n\r")
+        if len(seg) < 10:
+            continue
+        if seg in points:
+            continue
+        points.append(seg)
+        if len(points) >= max_points:
+            break
+
+    return points
 
 
 # ---------------- 状态读写（去重） ----------------
@@ -209,7 +254,8 @@ def main():
         title = getattr(e, "title", "(无标题)")
         link = getattr(e, "link", "")
         summary = (getattr(e, "summary", "") or "").strip()
-        items.append({"title": title, "link": link, "summary": summary})
+        published = (getattr(e, "published", "") or "").strip()
+        items.append({"title": title, "link": link, "summary": summary, "published": published})
 
     # 卡片标题：强制推送时标记为“测试”
     card_title = "AI早报更新（测试）" if FORCE_SEND else "AI早报更新"
