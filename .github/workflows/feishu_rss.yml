@@ -21,13 +21,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install fonts
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y fonts-noto-cjk
-
       - name: Install dependencies
-        run: pip install requests Pillow
+        run: pip install requests playwright
+
+      - name: Install Playwright browser
+        run: playwright install chromium --with-deps
 
       - name: Push to Feishu and generate image
         env:
