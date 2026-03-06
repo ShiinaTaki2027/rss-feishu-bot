@@ -1,12 +1,14 @@
 import requests
 import re
 import os
+import base64
 from datetime import datetime
 
 # ===== Config =====
-GITHUB_REPO = "imjuya/juya-ai-daily"
+GITHUB_REPO    = "imjuya/juya-ai-daily"
 FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK", "")
 SERVERCHAN_KEY = os.environ.get("SERVERCHAN_KEY", "")
+IMGBB_KEY      = os.environ.get("IMGBB_KEY", "")
 
 EMOJI_MAP = {
     "要闻":            "🗞️ 要闻",
@@ -134,6 +136,80 @@ def push_to_serverchan(issue, sections):
     print("Server酱推送结果:", resp.json())
 
 
+def upload_to_imgbb(image_path):
+    """上传图片到 imgbb，返回公开 URL"""
+    with open(image_path, "rb") as f:
+        image_data = base64.b64encode(f.read()).decode("utf-8")
+
+    resp = requests.post(
+        "https://api.imgbb.com/1/upload",
+        data={"key": IMGBB_KEY, "image": image_data},
+        timeout=30
+    )
+    result = resp.json()
+    if result.get("success"):
+        url = result["data"]["url"]
+        print(f"图片上传成功: {url}")
+        return url
+    else:
+        print("图片上传失败:", result)
+        return None
+
+
+def push_image_to_feishu(image_url, issue_url):
+    """通过 Webhook 发送图片消息到飞书群"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    payload = {
+        "msg_type": "interactive",
+        "card": {
+            "header": {
+                "title": {"tag": "plain_text", "content": f"🖼️ AI 早报长图 · {today}"},
+                "template": "green"
+            },
+            "elements": [
+                {
+                    "tag": "img",
+                    "img_key": image_url,   # imgbb URL 直接放这里
+                    "alt": {"tag": "plain_text", "content": "AI 早报长图"},
+                    "mode": "fit_horizontal"
+                },
+                {"tag": "hr"},
+                {
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": f"[📖 查看完整原文 →]({issue_url})"
+                    }
+                }
+            ]
+        }
+    }
+    resp = requests.post(FEISHU_WEBHOOK, json=payload, timeout=10)
+    result = resp.json()
+    print("飞书图片推送结果:", result)
+
+    # 飞书卡片 img_key 需要真正的 image_key，用 URL 会失败
+    # 改用图片链接卡片方式
+    if result.get("StatusCode") != 0:
+        print("卡片发送失败，改用富文本图片方式...")
+        fallback = {
+            "msg_type": "post",
+            "content": {
+                "post": {
+                    "zh_cn": {
+                        "title": f"🖼️ AI 早报长图 · {today}",
+                        "content": [
+                            [{"tag": "img", "image_key": image_url}],
+                            [{"tag": "a", "text": "📖 查看完整原文", "href": issue_url}]
+                        ]
+                    }
+                }
+            }
+        }
+        resp2 = requests.post(FEISHU_WEBHOOK, json=fallback, timeout=10)
+        print("飞书富文本图片推送结果:", resp2.json())
+
+
 def main():
     print("Fetching latest issue...")
     issue = get_latest_issue()
@@ -149,27 +225,32 @@ def main():
         print("Warning: no overview sections found")
         return
 
-    # 推送飞书
+    # 1. 推送飞书文字卡片
     if FEISHU_WEBHOOK:
         card = build_feishu_card(issue, sections)
         resp = requests.post(FEISHU_WEBHOOK, json=card, timeout=10)
-        print("飞书推送结果:", resp.json())
+        print("飞书文字卡片推送结果:", resp.json())
     else:
         print("FEISHU_WEBHOOK not set, skipping")
 
-    # 推送 Server酱（微信提醒）
+    # 2. 推送 Server酱（微信提醒）
     if SERVERCHAN_KEY:
         push_to_serverchan(issue, sections)
     else:
         print("SERVERCHAN_KEY not set, skipping")
 
-    # 生成长图
-    try:
-        from generate_image import generate_image
-        img_path = generate_image(issue, sections, "daily_report.png")
-        print(f"长图已生成: {img_path}")
-    except Exception as e:
-        print(f"生图失败（不影响推送）: {e}")
+    # 3. 生成长图 → 上传图床 → 推送飞书图片
+    if IMGBB_KEY and FEISHU_WEBHOOK:
+        try:
+            from generate_image import generate_image
+            img_path = generate_image(issue, sections, "daily_report.png")
+            image_url = upload_to_imgbb(img_path)
+            if image_url:
+                push_image_to_feishu(image_url, issue['html_url'])
+        except Exception as e:
+            print(f"生图/推图失败: {e}")
+    else:
+        print("IMGBB_KEY or FEISHU_WEBHOOK not set, skipping image push")
 
 
 if __name__ == "__main__":
