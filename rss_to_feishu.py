@@ -7,9 +7,6 @@ from datetime import datetime
 GITHUB_REPO = "imjuya/juya-ai-daily"
 FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK", "")
 
-# 跳过不需要展示的章节
-SKIP_SECTIONS = {"概览"}
-
 # 分类 emoji 映射表（未匹配到的自动用 📌）
 EMOJI_MAP = {
     "要闻":            "🗞️ 要闻",
@@ -40,43 +37,58 @@ def get_latest_issue():
     return issues[0] if issues else None
 
 
-def parse_markdown(body):
+def extract_overview(body):
     """
-    解析 Issue Markdown，按 ## 分类提取条目。
-    每个条目保留第一个链接 URL，用于生成可点击箭头。
-    返回: { 分类名: [ {"text": str, "url": str|None} ] }
+    只提取 ## 概览 区域内的内容。
+    概览区域结构：
+      ## 概览
+        ### 要闻          ← 三级标题作为分类
+        - [条目文字](链接)
+        ### 模型发布
+        - ...
+    遇到下一个 ## 二级标题时停止。
     """
     sections = {}
     current_section = None
+    in_overview = False
 
     for line in body.split('\n'):
         line = line.strip()
         if not line:
             continue
 
-        if line.startswith('## '):
-            title = line[3:].strip()
-            if title in SKIP_SECTIONS:
-                current_section = None
-            else:
-                current_section = title
-                sections[current_section] = []
-
-        elif line.startswith('###'):
+        # 进入概览区域
+        if line.startswith('## ') and line[3:].strip() == '概览':
+            in_overview = True
             continue
 
+        # 离开概览区域（遇到下一个 ## 标题）
+        if in_overview and line.startswith('## '):
+            break
+
+        if not in_overview:
+            continue
+
+        # ### 三级标题 = 分类
+        if line.startswith('### '):
+            current_section = line[4:].strip()
+            sections[current_section] = []
+
+        # 列表条目
         elif (line.startswith('- ') or line.startswith('* ')) and current_section is not None:
             raw = line[2:].strip()
 
-            # 提取第一个链接 URL
-            url_match = re.search(r'\(([^)]+)\)', raw)
-            url = url_match.group(1) if url_match else None
+            # 提取第一个外部链接（排除 #数字 锚点）
+            url = None
+            for m in re.finditer(r'\(([^)]+)\)', raw):
+                candidate = m.group(1)
+                if candidate.startswith('http'):
+                    url = candidate
+                    break
 
-            # 提取所有 [文字](url) 中的文字部分
+            # 提取文字
             text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', raw)
-            # 去掉行内代码
             text = re.sub(r'`[^`]+`', '', text).strip()
-            # 去掉末尾的 #数字 标签
             text = re.sub(r'\s*#\d+\s*$', '', text).strip()
 
             if text:
@@ -101,11 +113,9 @@ def build_feishu_card(issue, sections):
             text = item["text"]
             url = item["url"]
             if url:
-                # 文字 + 可点击的 ↗ 箭头链接
-                line = f"• {text} [↗]({url})"
+                overview_lines.append(f"• {text} [↗]({url})")
             else:
-                line = f"• {text}"
-            overview_lines.append(line)
+                overview_lines.append(f"• {text}")
 
         overview_lines.append("")  # 分类间空行
 
@@ -154,8 +164,12 @@ def main():
         return
 
     print(f"Got: {issue['title']}")
-    sections = parse_markdown(issue['body'])
+    sections = extract_overview(issue['body'])
     print(f"Parsed {len(sections)} sections: {list(sections.keys())}")
+
+    if not sections:
+        print("Warning: no overview sections found, check markdown structure")
+        return
 
     card = build_feishu_card(issue, sections)
     resp = requests.post(FEISHU_WEBHOOK, json=card, timeout=10)
