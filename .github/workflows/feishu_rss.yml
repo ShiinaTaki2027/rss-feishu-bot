@@ -44,6 +44,7 @@ jobs:
           name: daily-report-image
           path: daily_report.png
           retention-days: 7
+          
       - name: Keep workflow active
         run: |
           echo "Last run: $(date)" > last_run.txt
