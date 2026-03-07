@@ -10,18 +10,11 @@ on:
         required: false
         default: 'false'
 
-permissions:
-  contents: write
-
 jobs:
   push:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: true
+      - uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -43,7 +36,17 @@ jobs:
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           FEISHU_CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python rss_to_feishu.py
+
+      - name: Keep workflow active
+        run: |
+          echo "Last run: $(date)" > last_run.txt
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add last_run.txt
+          git commit -m "chore: keep workflow active" || echo "nothing to commit"
+          git push
 
       - name: Upload daily image as artifact
         uses: actions/upload-artifact@v4
@@ -51,12 +54,3 @@ jobs:
           name: daily-report-image
           path: daily_report.png
           retention-days: 7
-
-      - name: Keep workflow active
-        run: |
-          echo "Last run: $(date)" > last_run.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add last_run.txt
-          git commit -m "chore: keep workflow active" || echo "nothing to commit"
-          git push
