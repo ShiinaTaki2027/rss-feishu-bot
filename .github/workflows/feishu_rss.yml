@@ -44,3 +44,11 @@ jobs:
           name: daily-report-image
           path: daily_report.png
           retention-days: 7
+      - name: Keep workflow active
+        run: |
+          echo "Last run: $(date)" > last_run.txt
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add last_run.txt
+          git commit -m "chore: keep workflow active" || echo "nothing to commit"
+          git push
