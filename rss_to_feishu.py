@@ -321,6 +321,9 @@ def main():
             resp = requests.post(FEISHU_WEBHOOK, json=analysis_card, timeout=10)
             print("飞书 AI 解读卡片:", resp.json().get("msg", ""))
 
+    elif FEISHU_WEBHOOK and not KIMI_API_KEY:
+        print("跳过 AI 解读：未配置 KIMI_API_KEY")
+
     # ③ Server酱推送
     if SERVERCHAN_KEY:
         push_to_serverchan(issue, sections)
