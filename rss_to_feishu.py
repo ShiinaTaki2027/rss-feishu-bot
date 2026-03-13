@@ -191,8 +191,8 @@ def build_feishu_card(issue, sections):
         for item in items:
             text = item["text"]
             url = item["url"]
-overview_lines.append(f"• {text} [🔗]({url})" if url else f"• {text}")
-overview_lines.append("")
+            overview_lines.append(f"• {text} [🔗]({url})" if url else f"• {text}")
+        overview_lines.append("")
 
     return {
         "msg_type": "interactive",
