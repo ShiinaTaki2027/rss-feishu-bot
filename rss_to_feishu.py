@@ -228,7 +228,7 @@ def push_to_serverchan(issue, sections):
         for item in items:
             text = item["text"]
             url = item["url"]
-            lines.append(f"- [{text}]({url})" if url else f"- {text}")
+            lines.append(f"- [{text}][link]({url})" if url else f"- {text}")
         lines.append("")
     lines.append(f"---\n[📖 查看完整原文]({issue['html_url']})")
 
