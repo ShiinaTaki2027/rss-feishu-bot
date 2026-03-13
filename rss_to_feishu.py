@@ -101,9 +101,9 @@ def generate_ai_analysis(sections):
 
 请你作为一个AI行业观察者，用简洁易懂的语言为普通人解读今天的新闻：
 
-1. 今日最值得关注的1-2个重大进展是什么？为什么重要？
+1. 今日最值得关注的3个重大进展是什么？为什么重要？
 2. 这些新闻背后反映了哪些行业趋势？
-3. 对普通用户/从业者有什么实际影响？
+3. 我比较关注实际应用，给我解读claude和chatgpt的功能更新，并推荐其他好用产品和功能
 
 要求：
 - 语言通俗，避免堆砌专业术语
@@ -190,7 +190,7 @@ def build_feishu_card(issue, sections):
         for item in items:
             text = item["text"]
             url = item["url"]
-            overview_lines.append(f"• {text} [↗]({url})" if url else f"• {text}")
+            overview_lines.append(f"• {text} ({url})" if url else f"• {text}")
         overview_lines.append("")
 
     return {
