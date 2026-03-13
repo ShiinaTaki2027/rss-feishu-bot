@@ -72,6 +72,7 @@ def extract_overview(body):
                     url = c
                     break
             text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', raw)
+            text = re.sub(r'\(https?://[^\s)]+\)', '', text)
             text = re.sub(r'`[^`]+`', '', text).strip()
             text = re.sub(r'\s*#\d+\s*$', '', text).strip()
             if text:
@@ -190,8 +191,8 @@ def build_feishu_card(issue, sections):
         for item in items:
             text = item["text"]
             url = item["url"]
-            overview_lines.append(f"• {text} ({url})" if url else f"• {text}")
-        overview_lines.append("")
+overview_lines.append(f"• {text} [🔗]({url})" if url else f"• {text}")
+overview_lines.append("")
 
     return {
         "msg_type": "interactive",
