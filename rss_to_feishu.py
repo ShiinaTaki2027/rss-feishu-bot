@@ -71,10 +71,13 @@ def extract_overview(body):
                 if c.startswith('http'):
                     url = c
                     break
+
             text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', raw)
             text = re.sub(r'\(https?://[^\s)]+\)', '', text)
             text = re.sub(r'`[^`]+`', '', text).strip()
             text = re.sub(r'\s*#\d+\s*$', '', text).strip()
+            text = re.sub(r'\s*[↗→➜➚⇗🔗]+[\s\u3000]*$', '', text).strip()
+
             if text:
                 sections[current_section].append({"text": text, "url": url})
 
