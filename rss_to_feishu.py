@@ -1,6 +1,7 @@
 import requests
 import re
 import os
+import sys
 import time
 from datetime import datetime
 
@@ -82,22 +83,37 @@ def extract_overview(body):
 
 # ===== Kimi AI 解读 =====
 
-def generate_ai_analysis(sections):
-    """调用 Kimi API 对今日新闻生成解读"""
+def generate_ai_analysis(sections, trending_repos=None):
+    “””调用 Kimi API 对今日新闻和 GitHub trending 生成综合解读”””
     # 整理新闻内容给 Kimi
-    news_text = ""
+    news_text = “”
     for title, items in sections.items():
         if not items:
             continue
-        news_text += f"\n【{title}】\n"
+        news_text += f”\n【{title}】\n”
         for item in items:
-            news_text += f"- {item['text']}\n"
+            news_text += f”- {item['text']}\n”
 
-    prompt = f"""以下是今天的 AI 科技早报内容：
+    # 整理 GitHub trending 数据
+    trending_text = “”
+    if trending_repos:
+        trending_text = “\n\n【GitHub 今日热门项目】\n”
+        for r in trending_repos[:15]:
+            lang = f”（{r['language']}）” if r.get(“language”) else “”
+            stars = f” ⭐+{r['stars_today']:,}” if r.get(“stars_today”) else “”
+            desc = f”：{r['description']}” if r.get(“description”) else “”
+            trending_text += f”- {r['full_name']}{lang}{stars}{desc}\n”
 
-{news_text}
+    combined_input = news_text + trending_text
 
-请你作为一个“面向普通用户”的 AI 行业观察者，用简洁、清晰、适合飞书卡片阅读的中文，输出一份“今日 AI 解读”。
+    prompt = f”””以下是今天的三个信息源内容：
+1. AI 科技早报各板块新闻
+2. 行业动态（已包含在早报中）
+3. GitHub 今日热门项目
+
+{combined_input}
+
+请你作为一个”面向普通用户”的 AI 行业观察者，用简洁、清晰、适合飞书卡片阅读的中文，输出一份”今日 AI 解读”，综合涵盖以上三个信息源。
 
 我的目标不是长分析，而是：分条展示、清晰可读、一眼能扫完，并且尽量贴近日常使用场景。
 
@@ -175,8 +191,14 @@ ChatGPT（包含 OpenAI、ChatGPT、Codex 等）：
 - 但要说明：
   更新内容 + 使用场景 + 是否值得关注
 
+今日 GitHub 热门
+4. 从 GitHub 热门项目中挑出 2-3 个最值得关注的
+- 每条说明：项目名 + 是什么 + 对普通用户有什么用
+- 优先选 Python/AI 相关、普通人能用到的项目
+- 如果没有提供 GitHub 数据，跳过此部分
+
 额外要求：
-1. 全文控制在 300-450 字
+1. 全文控制在 350-500 字
 2. 必须全部分条展示
 3. 不允许出现长段落
 4. 用手机阅读友好的短句
@@ -184,7 +206,7 @@ ChatGPT（包含 OpenAI、ChatGPT、Codex 等）：
 6. 不要编造新闻
 7. Claude 和 ChatGPT 体系功能更新 **必须完整覆盖**
 8. 不允许漏掉 Codex / OpenAI 编程类更新
-9. 输出要有“帮我筛选”的感觉，而不是简单复述
+9. 输出要有”帮我筛选”的感觉，而不是简单复述
 
 请直接输出最终内容。
 不要解释思路。
@@ -342,10 +364,20 @@ def main():
         resp = requests.post(FEISHU_WEBHOOK, json=card, timeout=10)
         print("飞书早报卡片:", resp.json().get("msg", ""))
 
-    # ② 推送飞书 AI 解读卡片（第二条消息）
+    # ② 推送飞书 AI 解读卡片（综合早报 + GitHub trending）
     if FEISHU_WEBHOOK and KIMI_API_KEY:
-        print("正在生成 AI 解读...")
-        analysis = generate_ai_analysis(sections)
+        # 尝试抓取 GitHub trending 数据
+        trending_repos = None
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from github_trending import fetch_trending_repos
+            print("正在抓取 GitHub trending 数据用于综合解读...")
+            trending_repos = fetch_trending_repos("", "daily")
+        except Exception as e:
+            print(f"GitHub trending 抓取失败，将仅基于早报生成解读: {e}")
+
+        print("正在生成综合 AI 解读（早报 + 行业动态 + GitHub trending）...")
+        analysis = generate_ai_analysis(sections, trending_repos)
         if analysis:
             analysis_card = build_analysis_card(analysis)
             resp = requests.post(FEISHU_WEBHOOK, json=analysis_card, timeout=10)
