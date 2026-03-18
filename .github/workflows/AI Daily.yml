@@ -2,13 +2,8 @@ name: AI Daily to Feishu
 
 on:
   schedule:
-    - cron: '0 1 * * *'   # 北京时间 09:00
+    - cron: '0 1 * * *'   # 北京时间 09:00，开工前扫一眼
   workflow_dispatch:
-    inputs:
-      force_send:
-        description: 'Force push for testing'
-        required: false
-        default: 'false'
 
 jobs:
   push:
