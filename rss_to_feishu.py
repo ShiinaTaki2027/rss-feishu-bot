@@ -53,14 +53,14 @@ def extract_overview(body):
         line = line.strip()
         if not line:
             continue
-        if line.startswith('## ') and line[3:].strip() == '概览':
+        if line.startswith('# ') and line[3:].strip() == '概览':
             in_overview = True
             continue
-        if in_overview and line.startswith('## '):
+        if in_overview and line.startswith('# '):
             break
         if not in_overview:
             continue
-        if line.startswith('### '):
+        if line.startswith('## '):
             current_section = line[4:].strip()
             sections[current_section] = []
         elif (line.startswith('- ') or line.startswith('* ')) and current_section is not None:
