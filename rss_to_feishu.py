@@ -58,8 +58,8 @@ def extract_overview(body):
     从 issue body（Markdown 格式）中提取"概览"章节的内容。
 
     Issue 格式：
-    - `# 概览` 一级标题标志概览开始
-    - `## 要闻` 等二级标题作为分类
+    - `## 概览` 二级标题标志概览开始
+    - `### 要闻` 等三级标题作为分类
     - `- 条目` 列表作为新闻条目
 
     返回：
@@ -77,21 +77,21 @@ def extract_overview(body):
         if not line:
             continue
 
-        # 进入"概览"章节（一级标题 # 概览）
-        if line.startswith('# ') and line[2:].strip() == '概览':
+        # 进入"概览"章节（二级标题 ## 概览）
+        if line.startswith('## ') and line[3:].strip() == '概览':
             in_overview = True
             continue
 
-        # 遇到下一个一级标题，退出概览解析
-        if in_overview and line.startswith('# ') and line[2:].strip() != '概览':
+        # 遇到下一个二级标题，退出概览解析
+        if in_overview and line.startswith('## '):
             break
 
         if not in_overview:
             continue
 
-        # 二级标题作为分类名（## 要闻、## 模型发布 等）
-        if line.startswith('## '):
-            current_section = line[3:].strip()
+        # 三级标题作为分类名（### 要闻、### 模型发布 等）
+        if line.startswith('### '):
+            current_section = line[4:].strip()
             sections[current_section] = []
         # 列表条目：提取文本和链接
         elif (line.startswith('- ') or line.startswith('* ')) and current_section is not None:
